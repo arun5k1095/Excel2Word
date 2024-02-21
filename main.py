@@ -7,17 +7,19 @@ warnings.filterwarnings('ignore')
 
 Input_excel_file = 'Input.xlsx'
 ExcelData_df = pd.read_excel(Input_excel_file)
+def detect_hyperlink_columns(df):
 
-def detect_hyperlink_column(df):
-    for col in ExcelData_df.columns:
+    hyperlink_columns = []
+    for col in df.columns:
         for value in df[col]:
             if isinstance(value, str) and re.match(r'https?://\S+', value):
-                return col
-    return None
+                hyperlink_columns.append(col)
+                break  
+    return hyperlink_columns
 
-def add_hyperlink(cell, url, text, color, underline):
+def add_hyperlink(cell, url, color, underline):
     paragraph = cell.paragraphs[0]
-    paragraph.clear()
+    paragraph.clear() 
     part = paragraph.part
     r_id = part.relate_to(url, docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK, is_external=True)
     hyperlink = docx.oxml.shared.OxmlElement('w:hyperlink')
@@ -33,15 +35,17 @@ def add_hyperlink(cell, url, text, color, underline):
         u.set(docx.oxml.shared.qn('w:val'), 'none')
         rPr.append(u)
     new_run.append(rPr)
-    new_run.text = text
+    new_run.text = url 
     hyperlink.append(new_run)
     paragraph._p.append(hyperlink)
     return hyperlink
 
-hyperlink_column = detect_hyperlink_column(ExcelData_df)
 
-if hyperlink_column is None:
-    print("No URL-like column detected in the DataFrame.")
+
+hyperlink_columns = detect_hyperlink_columns(ExcelData_df)
+
+if not hyperlink_columns:
+    print("No URL-like columns detected in the DataFrame.")
 else:
     Word = docx.Document()
     table = Word.add_table(rows=1, cols=len(ExcelData_df.columns))
@@ -64,10 +68,11 @@ else:
                 for paragraph in paragraphs:
                     paragraph.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.LEFT
 
-        if ExcelData_df.columns[-1] == hyperlink_column:
-            cell = row_cells[-1]
-            hyperlink = add_hyperlink(cell, row[-1], row[-1], '0000FF', False)
+        # Add hyperlinks if the current column matches any of the detected hyperlink columns
+        for col in hyperlink_columns:
+            cell = row_cells[ExcelData_df.columns.get_loc(col)]
+            hyperlink = add_hyperlink(cell, row[col], '0000FF', False)
 
-
+    # Save the Word document
     Word.save('Output.docx')
     print("Done , file saved as Output.docx at cwd ")
